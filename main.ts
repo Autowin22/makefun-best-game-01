@@ -1,18 +1,12 @@
-// A working best-game-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. A starting point, not a winner: Block Dodger, a
-// plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a title screen,
-// score, lives and levels, game over and restart, flat colours and no sound. Build your own game
-// (any genre, any library you vendor under game/, or none), put your 3 or 4 PNG or JPEG screenshots
-// in screenshots/ (the first by name is the cover) and run it.
+// Bloom Bastion: an original 2D arena survival shooter (defend the Great Bloom from geometric 
+// blight creatures, 10 waves, upgrades, WebAudio sound), packaged by copying game/ and 
+// screenshots/ to the output directory and writing dossier.json with the vendored library.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
@@ -20,15 +14,22 @@ import { buildDossier } from './vendor/makefun-game.ts';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
+if (!existsSync(join(here, 'game', 'index.html'))) {
+  console.error('Error: game/index.html must exist beside main.ts');
+  process.exit(1);
+}
+const screenshotsDir = join(here, 'screenshots');
+const screenshots = existsSync(screenshotsDir) ? readdirSync(screenshotsDir).filter(f => statSync(join(screenshotsDir, f)).isFile()) : [];
+if (screenshots.length < 3) {
+  console.error('Error: screenshots/ must hold at least 3 image files');
+  process.exit(1);
+}
+
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
-// scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
-// files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
-// screenshots/ and dossier.json).
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {
@@ -39,3 +40,8 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+
+const dossierRaw = readFileSync(join(out, 'dossier.json'), 'utf8');
+const dossier = JSON.parse(dossierRaw);
+const finalFiles = readdirSync(join(out, 'game'), { recursive: true }).filter(f => statSync(join(out, 'game', f)).isFile());
+console.log(`${finalFiles.length} files, ${dossier.images?.length ?? 0} screenshots, ${Buffer.byteLength(dossierRaw)} bytes`);
